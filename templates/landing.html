@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect Your Farm Data - AgriCapture</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo h1 {
+            color: #667eea;
+            font-size: 32px;
+            font-weight: 700;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h2 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .benefits {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .benefits h3 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        
+        .benefit-item {
+            display: flex;
+            align-items: start;
+            margin-bottom: 12px;
+        }
+        
+        .benefit-icon {
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .benefit-text {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .connect-btn {
+            width: 100%;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .connect-btn:hover {
+            background: #5568d3;
+        }
+        
+        .security-notice {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            border-radius: 4px;
+        }
+        
+        .security-notice p {
+            color: #2e7d32;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>🌾 AgriCapture</h1>
+        </div>
+        
+        <div class="header">
+            <h2>Connect Your Farm Data</h2>
+            <p>Securely share your John Deere Operations Center data with AgriCapture to unlock powerful insights and streamline your farm management.</p>
+        </div>
+        
+        <div class="benefits">
+            <h3>What You'll Get:</h3>
+            
+            <div class="benefit-item">
+                <div class="benefit-icon">✓</div>
+                <div class="benefit-text">
+                    <strong>Automatic Data Sync:</strong> Your field boundaries, operations, and management data automatically updated
+                </div>
+            </div>
+            
+            <div class="benefit-item">
+                <div class="benefit-icon">✓</div>
+                <div class="benefit-text">
+                    <strong>Advanced Analytics:</strong> Get insights from your historical and current farm data
+                </div>
+            </div>
+            
+            <div class="benefit-item">
+                <div class="benefit-icon">✓</div>
+                <div class="benefit-text">
+                    <strong>Full Control:</strong> You can revoke access anytime through your John Deere account
+                </div>
+            </div>
+            
+            <div class="benefit-item">
+                <div class="benefit-icon">✓</div>
+                <div class="benefit-text">
+                    <strong>Secure Connection:</strong> We use industry-standard OAuth 2.0 encryption
+                </div>
+            </div>
+        </div>
+        
+        <button class="connect-btn" onclick="connectAccount()">
+            Connect John Deere Account
+        </button>
+        
+        <div class="security-notice">
+            <p>
+                <strong>🔒 Your Security is Our Priority:</strong> 
+                We will never see your John Deere password. You'll log in directly on John Deere's secure website, and you control what data is shared.
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>Powered by HornbillAg | Questions? Contact support@hornbillag.com</p>
+        </div>
+    </div>
+    
+    <script>
+        function connectAccount() {
+            // Redirect to OAuth login endpoint
+            window.location.href = '{{ base_url }}/auth/login';
+        }
+    </script>
+</body>
+</html>
