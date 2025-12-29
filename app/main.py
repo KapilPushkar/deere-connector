@@ -10,7 +10,57 @@ from .database import db
 from .jdoc_api import jdoc_client
 from .models import NormalizedOperation
 
+import logging
+import uuid
+from datetime import datetime
+from fastapi import FastAPI, Request
+from app.logging_config import setup_logging, get_logger
 
+
+##
+# Initialize logging
+setup_logging()
+logger = get_logger(__name__)
+
+app = FastAPI(title="Deere Connector API")
+
+# Middleware to add request ID
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    
+    # Log request start
+    logger.info(
+        f"Request started: {request.method} {request.url.path}",
+        extra={"extra": {"request_id": request_id}}
+    )
+    
+    try:
+        response = await call_next(request)
+        logger.info(
+            f"Request completed: {request.method} {request.url.path} - {response.status_code}",
+            extra={"extra": {"request_id": request_id}}
+        )
+        return response
+    except Exception as e:
+        logger.error(
+            f"Request failed: {str(e)}",
+            extra={"extra": {"request_id": request_id}},
+            exc_info=True
+        )
+        raise
+
+# Health check endpoint (required by Docker)
+@app.get("/health")
+async def health_check():
+    logger.info("Health check requested")
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+##
 app = FastAPI(title="AgriCapture JDOC Integration")
 
 templates = Jinja2Templates(directory="templates")
