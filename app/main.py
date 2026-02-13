@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from typing import Optional
@@ -10,11 +10,19 @@ from .database import db
 from .jdoc_api import jdoc_client
 from .models import NormalizedOperation
 
+
 import logging
 import uuid
 from datetime import datetime
 from fastapi import FastAPI, Request
 from app.logging_config import setup_logging, get_logger
+from app.s3_storage import save_deere_data_to_s3, list_s3_files
+
+import sqlite3
+import io
+import csv
+import pathlib
+
 
 
 ##
@@ -163,6 +171,33 @@ async def success(farmer_id: str = Query(...)):
         "next_steps": "AgriCapture will now automatically sync your field data"
     })
 
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_ui():
+    """
+    Serve the admin dashboard UI.
+    """
+    base_dir = pathlib.Path(__file__).resolve().parent.parent  # /opt/deere-connector
+    index_path = base_dir / "frontend" / "index.html"
+    try:
+        html = index_path.read_text(encoding="utf-8")
+    except Exception:
+        return HTMLResponse("<h1>Admin UI not found</h1>", status_code=500)
+    return HTMLResponse(content=html, status_code=200)
+
+
+base_dir = pathlib.Path(__file__).resolve().parent.parent  # /opt/deere-connector
+
+app.mount(
+    "/admin-static",
+    StaticFiles(directory=str(base_dir / "frontend" / "assets")),
+    name="admin-static",
+)
+
+
+
+
 # ============================================
 # API ENDPOINTS
 # ============================================
@@ -184,6 +219,26 @@ async def list_organizations(farmer_id: str = Query(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/admin/sync/organizations")
+async def sync_organizations_to_db(farmer_id: str = Query(...)):
+    """
+    Fetch organizations from Deere and store them in SQLite 'organizations' table.
+    """
+    try:
+        orgs = await jdoc_client.get_organizations(farmer_id)
+        for org in orgs:
+            db.upsert_organization(farmer_id, org)
+
+        return {
+            "status": "success",
+            "farmer_id": farmer_id,
+            "organizations_synced": len(orgs)
+        }
+    except Exception as e:
+        logger.error(f"Failed to sync organizations: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/organizations/{org_id}/fields")
 async def list_fields(org_id: str, farmer_id: str = Query(...)):
     """
@@ -203,6 +258,33 @@ async def list_fields(org_id: str, farmer_id: str = Query(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/admin/sync/organizations/{org_id}/fields")
+async def sync_fields_to_db(
+    org_id: str,
+    farmer_id: str = Query(...)
+):
+    """
+    Fetch fields with boundaries from Deere and store them in SQLite 'fields' table.
+    """
+    try:
+        fields = await jdoc_client.get_fields(
+            farmer_id, org_id, include_boundaries=True
+        )
+        for field in fields:
+            db.upsert_field(org_id, field)
+
+        return {
+            "status": "success",
+            "farmer_id": farmer_id,
+            "org_id": org_id,
+            "fields_synced": len(fields)
+        }
+    except Exception as e:
+        logger.error(f"Failed to sync fields: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
 @app.get("/api/fields/{field_id}/operations")
 async def get_field_operations(
     field_id: str,
@@ -212,29 +294,35 @@ async def get_field_operations(
     end_date: Optional[str] = Query(None, description="ISO format: YYYY-MM-DDTHH:MM:SS.000Z")
 ):
     """
-    Get operations for a specific field within a date range
-    
-    Path params:
-        field_id: Field ID
-    Query params:
-        org_id: Organization ID (required)
-        farmer_id: Farmer identifier (required)
-        start_date: Start date (optional, e.g., '2020-01-01T00:00:00.000Z')
-        end_date: End date (optional, e.g., '2025-01-01T00:00:00.000Z')
-        
-    Returns:
-        List of field operations
-        
-    Example:
-        GET /api/fields/abc123/operations?org_id=12345&farmer_id=farmer1&start_date=2020-01-01T00:00:00.000Z&end_date=2025-01-01T00:00:00.000Z
+    Get operations for a specific field within a date range and
+    store the raw JSON into SQLite.
     """
     try:
+        # Existing Deere call, unchanged in terms of parameters
         operations = await jdoc_client.get_field_operations(
             farmer_id, org_id, field_id, start_date, end_date
         )
-        return {"operations": operations, "count": len(operations)}
+
+        # NEW: persist each operation as raw JSON
+        for op in operations:
+            db.upsert_raw_operation(
+                org_id=org_id,
+                field_id=field_id,
+                operation=op,
+            )
+
+        return {
+            "status": "success",
+            "farmer_id": farmer_id,
+            "org_id": org_id,
+            "field_id": field_id,
+            "count": len(operations),
+            "operations": operations,
+        }
     except Exception as e:
+        logger.error(f"Failed to fetch/store operations: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
     
 
 @app.get("/api/fields/{field_id}/operations/normalized")
@@ -246,38 +334,27 @@ async def get_normalized_field_operations(
     end_date: Optional[str] = Query(None, description="ISO format: YYYY-MM-DDTHH:MM:SS.000Z")
 ):
     """
-    Get NORMALIZED field operations for a specific field within a date range
-    
-    This endpoint returns operations in AgriCapture's clean format with:
-    - Operation type clearly identified (PLANTING, HARVEST, TILLAGE, FERTILIZER)
-    - Key fields extracted: crop, product, amount, rate, area, date
-    - Much easier to use for analytics than raw JDOC response
-    
-    Path params:
-        field_id: Field ID
-    Query params:
-        org_id: Organization ID (required)
-        farmer_id: Farmer identifier (required)
-        start_date: Start date (optional, e.g., '2020-01-01T00:00:00.000Z')
-        end_date: End date (optional, e.g., '2025-01-01T00:00:00.000Z')
-        
-    Returns:
-        List of normalized field operations
-        
-    Example:
-        GET /api/fields/abc123/operations/normalized
-            ?org_id=12345
-            &farmer_id=farmer1
-            &start_date=2020-01-01T00:00:00.000Z
-            &end_date=2025-01-01T00:00:00.000Z
+    Get NORMALIZED field operations for a specific field within a date range.
+    Also stores raw and normalized operations in SQLite.
     """
     try:
-        # First, get the raw operations from JDOC
+        # 1) Get the raw operations from JDOC
         raw_operations = await jdoc_client.get_field_operations(
             farmer_id, org_id, field_id, start_date, end_date
         )
-        
-        # Get field name from a separate call (we'll use field_id as fallback)
+
+        # 2) Store raw JSON in operations_raw
+        for raw_op in raw_operations:
+            try:
+                db.upsert_raw_operation(
+                    org_id=org_id,
+                    field_id=field_id,
+                    operation=raw_op,
+                )
+            except Exception as e:
+                logger.error(f"Error upserting raw operation {raw_op.get('id')}: {e}", exc_info=True)
+
+        # 3) Get field name (same as before)
         field_name = field_id  # Fallback
         try:
             fields = await jdoc_client.get_fields(farmer_id, org_id, include_boundaries=False)
@@ -285,39 +362,92 @@ async def get_normalized_field_operations(
                 if field.get("id") == field_id:
                     field_name = field.get("name", field_id)
                     break
-        except:
-            pass  # If this fails, just use field_id as name
-        
-        # Get org name (we already have it from organizations call, but for now use as fallback)
-        org_name = org_id  # Fallback
-        
-        # Transform each raw operation into normalized format
+        except Exception:
+            pass
+
+        org_name = org_id
+
+        # 4) Normalize using your existing normalize_operation
+
         from app.jdoc_api import normalize_operation
-        
+
         normalized_ops = []
         for raw_op in raw_operations:
             try:
-                normalized = normalize_operation(
-                    raw_op, 
+                normalized_model = normalize_operation(
+                    raw_op,
                     field_id=field_id,
                     field_name=field_name,
                     org_id=org_id,
-                    org_name=org_name
+                    org_name=org_name,
                 )
+                # Pydantic v2: model_dump(), v1: dict()
+                if hasattr(normalized_model, "model_dump"):
+                    normalized = normalized_model.model_dump()
+                else:
+                    normalized = normalized_model.dict()
                 normalized_ops.append(normalized)
             except Exception as e:
-                # Log error but continue processing other operations
-                print(f"Error normalizing operation {raw_op.get('id')}: {e}")
+                logger.error(
+                    f"Error normalizing operation {getattr(raw_op, 'id', None)}: {e}",
+                    exc_info=True,
+                )
                 continue
-        
+
+
+        # 5) ADAPT normalized dicts to DB schema before insert
+        db_rows = []
+        for n in normalized_ops:
+            raw = n.get("raw_jdoc_data") or {}
+            op_id = raw.get("id") or f"{field_id}-{n.get('date')}"
+
+            op_date = n.get("date")
+            operation_date = op_date
+            start_time = op_date
+            end_time = op_date
+
+            db_rows.append({
+                "operation_id": op_id,
+                "field_id": n.get("field_id"),
+                "org_id": n.get("org_id"),
+                "operation_type": n.get("operation_type"),
+                "operation_date": operation_date,
+                "start_time": start_time,
+                "end_time": end_time,
+                "crop_name": n.get("crop_name"),
+                "product_name": n.get("product_name"),
+                "product_category": None,
+                "rate_value": n.get("rate"),
+                "rate_unit": n.get("rate_unit"),
+                "total_amount": n.get("amount"),
+                "total_amount_unit": None,
+                "area_ha": n.get("area"),
+                "equipment_name": None,
+                "notes": None,
+            })
+
+        # 6) Insert into operations_normalized
+        if db_rows:
+            try:
+                db.insert_normalized_operations(
+                    org_id=org_id,
+                    field_id=field_id,
+                    normalized_ops=db_rows,
+                )
+            except Exception as e:
+                logger.error(f"Error inserting normalized operations: {e}", exc_info=True)
+
         return {
             "operations": normalized_ops,
             "count": len(normalized_ops),
-            "note": "Normalized format - easier to use for analytics"
+            "note": "Normalized format - easier to use for analytics",
         }
-        
+
     except Exception as e:
+        logger.error(f"Failed to fetch/normalize/store operations: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
     
 @app.get("/api/fields/{field_id}/operations/sync")
 async def get_field_operations_with_sync(
@@ -455,6 +585,313 @@ async def get_field_operations_with_sync(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+VALID_TABLES = {
+    "organizations",
+    "fields",
+    "operations_raw",
+    "operations_normalized",
+    "field_sync_state",
+    "connected_organizations",
+    "user_tokens",
+}
+
+
+@app.get("/admin/tables/{table_name}")
+async def view_table(table_name: str):
+    if table_name not in VALID_TABLES:
+        raise HTTPException(status_code=400, detail="Invalid table name")
+
+    rows = db.fetch_all_rows(table_name)
+    return {
+        "table": table_name,
+        "count": len(rows),
+        "rows": rows,
+    }
+
+
+@app.get("/admin/tables/{table_name}/download")
+async def download_table_csv(table_name: str):
+    if table_name not in VALID_TABLES:
+        raise HTTPException(status_code=400, detail="Invalid table name")
+
+    cols, rows = db.fetch_all_rows_raw(table_name)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(cols)
+    writer.writerows(rows)
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{table_name}.csv"',
+        },
+    )
+
+
+
+
+@app.get("/admin/operations/normalized")
+async def list_normalized_operations(
+    org_id: Optional[str] = Query(None),
+    field_id: Optional[str] = Query(None),
+):
+    """
+    Flat view of normalized operations, joined with org & field names.
+    Optional filters: org_id, field_id.
+    """
+    rows = db.fetch_all_normalized_operations(org_id=org_id, field_id=field_id)
+    return {
+        "count": len(rows),
+        "operations": rows,
+    }
+
+
+@app.get("/admin/operations/normalized/download")
+async def download_normalized_operations_csv(
+    org_id: Optional[str] = Query(None),
+    field_id: Optional[str] = Query(None),
+):
+    """
+    Download all normalized operations (optionally filtered) as CSV.
+    """
+    # Reuse the DB helper but we need columns + rows
+    conn = sqlite3.connect(db.db_path)
+    cursor = conn.cursor()
+
+    base_sql = """
+        SELECT
+          o.operation_id,
+          o.org_id,
+          org.name AS org_name,
+          o.field_id,
+          f.name AS field_name,
+          o.operation_type,
+          o.operation_date,
+          o.start_time,
+          o.end_time,
+          o.crop_name,
+          o.product_name,
+          o.product_category,
+          o.rate_value,
+          o.rate_unit,
+          o.total_amount,
+          o.total_amount_unit,
+          o.area_ha,
+          o.equipment_name,
+          o.notes
+        FROM operations_normalized o
+        LEFT JOIN fields f
+          ON o.field_id = f.field_id
+        LEFT JOIN organizations org
+          ON o.org_id = org.org_id
+    """
+
+    conditions = []
+    params = []
+
+    if org_id:
+        conditions.append("o.org_id = ?")
+        params.append(org_id)
+    if field_id:
+        conditions.append("o.field_id = ?")
+        params.append(field_id)
+
+    if conditions:
+        base_sql += " WHERE " + " AND ".join(conditions)
+
+    cursor.execute(base_sql, params)
+    cols = [d[0] for d in cursor.description]
+    rows = cursor.fetchall()
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(cols)
+    writer.writerows(rows)
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="operations_normalized.csv"',
+        },
+    )
+
+
+
+from typing import Optional
+
+@app.post("/admin/sync/farmer")
+async def sync_farmer_data(
+    farmer_id: str = Query(..., description="AgriCapture farmer id / JDOC user_id"),
+    org_id: Optional[str] = Query(None, description="Optional: limit sync to one organization"),
+    start_date: Optional[str] = Query(None, description="Optional: ISO start date for operations"),
+    end_date: Optional[str] = Query(None, description="Optional: ISO end date for operations"),
+):
+    """
+    Walk Deere hierarchy for a farmer and populate:
+    - organizations
+    - fields (per organization)
+    - operations_raw
+    - operations_normalized
+    """
+    synced_orgs = 0
+    synced_fields = 0
+    synced_ops = 0
+
+    # 1) Get organizations (either all or a specific one)
+    orgs = await jdoc_client.get_organizations(farmer_id)
+
+    if org_id:
+        orgs = [o for o in orgs if o.get("id") == org_id]
+
+    for org in orgs:
+        oid = org.get("id")
+        if not oid:
+            continue
+        synced_orgs += 1
+
+        # Ensure org is in DB (if get_organizations doesn't already upsert)
+        try:
+            db.upsert_organization(farmer_id, org)
+        except Exception as e:
+            logger.error(f"Error upserting organization {oid}: {e}", exc_info=True)
+
+        # 2) Fetch fields for this org
+        try:
+            fields = await jdoc_client.get_fields(farmer_id, oid, include_boundaries=True)
+        except Exception as e:
+            logger.error(f"Error fetching fields for org {oid}: {e}", exc_info=True)
+            continue
+
+        for field in fields:
+            fid = field.get("id")
+            if not fid:
+                continue
+
+            # Save field in DB
+            try:
+                db.upsert_field(oid, field)
+                synced_fields += 1
+            except Exception as e:
+                logger.error(f"Error upserting field {fid} for org {oid}: {e}", exc_info=True)
+
+            # 3) Fetch raw operations for this field
+            try:
+                raw_ops = await jdoc_client.get_field_operations(
+                    farmer_id, oid, fid, start_date, end_date
+                )
+            except Exception as e:
+                logger.error(f"Error fetching operations for field {fid}, org {oid}: {e}", exc_info=True)
+                continue
+
+            from app.jdoc_api import normalize_operation
+
+            # 3a) Store raw & normalized operations
+            normalized_ops = []
+            for raw_op in raw_ops:
+                try:
+                    # raw → operations_raw
+                    db.upsert_raw_operation(org_id=oid, field_id=fid, operation=raw_op)
+
+                    # normalize → NormalizedOperation model
+                    norm_model = normalize_operation(
+                        raw_op,
+                        field_id=fid,
+                        field_name=field.get("name", fid),
+                        org_id=oid,
+                        org_name=org.get("name", oid),
+                    )
+
+                    # Pydantic v1/v2
+                    if hasattr(norm_model, "model_dump"):
+                        norm_dict = norm_model.model_dump()
+                    else:
+                        norm_dict = norm_model.dict()
+
+                    normalized_ops.append(norm_dict)
+                except Exception as e:
+                    logger.error(f"Error normalizing/storing operation: {e}", exc_info=True)
+                    continue
+
+            if normalized_ops:
+                try:
+                    # adapt to DB schema (same mapping you use in /operations/normalized)
+                    db_rows = []
+                    for n in normalized_ops:
+                        raw = n.get("raw_jdoc_data") or {}
+                        op_id = raw.get("id") or f"{fid}-{n.get('date')}"
+                        op_date = n.get("date")
+
+                        db_rows.append({
+                            "operation_id": op_id,
+                            "field_id": n.get("field_id"),
+                            "org_id": n.get("org_id"),
+                            "operation_type": n.get("operation_type"),
+                            "operation_date": op_date,
+                            "start_time": op_date,
+                            "end_time": op_date,
+                            "crop_name": n.get("crop_name"),
+                            "product_name": n.get("product_name"),
+                            "product_category": None,
+                            "rate_value": n.get("rate"),
+                            "rate_unit": n.get("rate_unit"),
+                            "total_amount": n.get("amount"),
+                            "total_amount_unit": None,
+                            "area_ha": n.get("area"),
+                            "equipment_name": None,
+                            "notes": None,
+                        })
+
+                    db.insert_normalized_operations(
+                        org_id=oid,
+                        field_id=fid,
+                        normalized_ops=db_rows,
+                    )
+                    synced_ops += len(db_rows)
+                except Exception as e:
+                    logger.error(f"Error inserting normalized operations for field {fid}: {e}", exc_info=True)
+
+    return {
+        "status": "success",
+        "farmer_id": farmer_id,
+        "org_filter": org_id,
+        "synced_organizations": synced_orgs,
+        "synced_fields": synced_fields,
+        "synced_operations": synced_ops,
+        "note": "Data populated into organizations, fields, operations_raw, operations_normalized",
+    }
+
+
+
+
+@app.get("/admin/dashboard/summary")
+async def get_dashboard_summary():
+    """
+    Summary stats for admin overview page.
+    """
+    summary = db.get_dashboard_summary()
+
+    # For now, farmers_count = distinct farmer_id in organizations
+    conn = sqlite3.connect(db.db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(DISTINCT farmer_id) FROM organizations")
+    farmers_count = cursor.fetchone()[0]
+    conn.close()
+
+    return {
+        "organizations_connected": summary["organizations_count"],
+        "fields_connected": summary["fields_count"],
+        "total_area_ha": summary["total_area_ha"],
+        "operations_count": summary["operations_count"],
+        "farmers_connected": farmers_count,
+    }
 
 
 

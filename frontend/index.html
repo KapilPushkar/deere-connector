@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AgriCapture Admin</title>
+  <link rel="icon" type="image/x-icon" href="/admin-static/favicon.ico">
+  <style>
+    .top-header {
+      height: 56px;
+      background: #25723b;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      box-sizing: border-box;
+    }
+    .top-header-left { display: flex; align-items: center; }
+    .top-logo { max-height: 32px; width: auto; }
+    .top-header-right { font-size: 13px; color: #e5e7eb; }
+    .layout { display: flex; min-height: calc(100vh - 56px); } /* adjust for header height */
+
+    body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f6f8; }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 240px; background: #f3f4f7; border-right: 1px solid #dde0e5; }
+    .logo { padding: 16px 20px; font-weight: 700; color: #fff; background: #25723b; }
+    .logo span { color: #ffc94c; }
+    .nav-item { display: flex; align-items: center; padding: 12px 20px; color: #555; cursor: pointer; text-decoration: none; }
+    .nav-item.active { background: #25723b; color: #fff; font-weight: 600; }
+    .nav-item:hover { background: #e1e4ea; }
+    .content { flex: 1; padding: 20px 32px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .topbar-title { font-size: 20px; font-weight: 600; }
+    .cards-row { display: flex; gap: 16px; margin-bottom: 24px; }
+    .card { background: #fff; border-radius: 6px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(15,23,42,0.08); flex: 1; }
+    .card-label { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+    .card-value { font-size: 26px; font-weight: 700; color: #15803d; }
+    .card-sub { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .section-title { font-weight: 600; margin-bottom: 8px; }
+    .section-box { background: #fff; border-radius: 6px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(15,23,42,0.08); }
+    .button { padding: 8px 14px; background: #15803d; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    .button:disabled { opacity: 0.6; cursor: default; }
+    .small-text { font-size: 12px; color: #6b7280; }
+  </style>
+</head>
+<body>
+
+<div class="top-header">
+  <div class="top-header-left">
+    <img src="/admin-static/agricapture-logo.jpg" alt="AgriCapture" class="top-logo">
+  </div>
+  <div class="top-header-right">
+    <!-- Placeholder for notifications/Admin; can be enhanced later -->
+    <span class="small-text" style="color:#e5e7eb;">Admin</span>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <a class="nav-item active" id="nav-overview">Overview</a>
+    <a class="nav-item" id="nav-farmers">Farmers</a>
+    <a class="nav-item" id="nav-organizations">Organizations</a>
+    <a class="nav-item" id="nav-fields">Fields</a>
+    <a class="nav-item" id="nav-operations">Operations</a>
+    <a class="nav-item" id="nav-sync">Sync & Logs</a>
+    <a class="nav-item" id="nav-exports">Exports</a>
+  </aside>
+
+  <main class="content">
+    <div class="topbar">
+      <div class="topbar-title" id="page-title">Overview</div>
+      <div><!-- right side (notifications/admin) can be added later --></div>
+    </div>
+
+    <!-- OVERVIEW PAGE -->
+    <div id="page-overview">
+      <section class="cards-row">
+        <div class="card">
+          <div class="card-label">Organizations Connected</div>
+          <div class="card-value" id="org-count">0</div>
+          <div class="card-sub">Connected</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Fields Connected</div>
+          <div class="card-value" id="field-count">0</div>
+          <div class="card-sub" id="total-area">Total area: 0 ha</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Farmers Connected</div>
+          <div class="card-value" id="farmer-count">0</div>
+        </div>
+      </section>
+
+      <section class="section-box">
+        <div class="section-title">Data Sync</div>
+        <p class="small-text" id="sync-info">
+          Data is synced from John Deere Operations Center (JDOC) into the local SQLite database.
+        </p>
+        <button class="button" id="refresh-sync-button">Refresh from JDOC</button>
+        <span class="small-text" id="refresh-status" style="margin-left:8px;"></span>
+      </section>
+    </div>
+
+    <!-- PLACEHOLDER PAGES (Farmers, Fields, Operations, Sync, Exports) can be added later -->
+
+        <!-- OVERVIEW PAGE -->
+    <div id="page-overview">
+      <!-- ...existing Overview content... -->
+    </div>
+
+    <!-- FARMERS PAGE (placeholder) -->
+    <div id="page-farmers" style="display:none;">
+      <section class="section-box">
+        <div class="section-title">Farmers</div>
+        <p class="small-text">
+          Coming soon – this page will show farmers and their organizations.
+        </p>
+      </section>
+    </div>
+
+
+    <!-- ORGANIZATIONS PAGE -->
+    <div id="page-organizations" style="display:none;">
+      <section class="section-box">
+        <div class="section-title">Organizations</div>
+        <p class="small-text">
+          View organizations for a farmer and sync organizations from Deere into the database.
+        </p>
+
+        <div style="margin-top:16px;">
+          <div class="section-subtitle">List organizations for a farmer (GET /api/organizations)</div>
+          <p class="small-text">
+            Call the API to list all connected organizations (growers) for a specific farmer.
+          </p>
+          <div style="display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap;">
+            <input
+              id="orgs-farmer-id"
+              type="text"
+              placeholder="Enter farmer_id"
+              class="input"
+              style="min-width:220px;"
+            />
+            <button class="button" id="btn-orgs-list" style="background:#2563eb;">
+              List Organizations
+            </button>
+          </div>
+          <pre id="orgs-list-output" class="code-block" style="margin-top:8px; max-height:220px; overflow:auto;"></pre>
+        </div>
+
+        <hr style="margin:20px 0; border:none; border-top:1px solid #e5e7eb;">
+
+        <div style="margin-top:8px;">
+          <div class="section-subtitle">Sync organizations to DB (POST /admin/sync/organizations)</div>
+          <p class="small-text">
+            Trigger a background sync: fetch organizations from Deere and store them in the SQLite <code>organizations</code> table.
+          </p>
+          <button class="button" id="btn-orgs-sync" style="background:#16a34a; margin-top:8px;">
+            Sync Organizations
+          </button>
+          <pre id="orgs-sync-output" class="code-block" style="margin-top:8px; max-height:180px; overflow:auto;"></pre>
+        </div>
+      </section>
+    </div>
+
+
+
+    <!-- FIELDS PAGE -->
+        <!-- FIELDS PAGE -->
+    <div id="page-fields" style="display:none;">
+      <section class="section-box">
+        <div class="section-title">Fields</div>
+        <p class="small-text">
+          Use the controls below to fetch field data from JDOC and download fields from the local database.
+        </p>
+
+        <div style="margin-top:12px; margin-bottom:12px;">
+          <label class="small-text">Farmer ID</label><br>
+          <input id="fields-farmer-id" placeholder="e.g. anonymous" style="padding:6px 8px; width:240px; margin-bottom:6px;">
+          <br>
+          <label class="small-text">Org ID</label><br>
+          <input id="fields-org-id" placeholder="e.g. 4185" style="padding:6px 8px; width:240px;">
+        </div>
+
+        <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="button" id="btn-fields-fetch-json">
+            Fetch fields from JDOC (JSON)
+          </button>
+          <button class="button" id="btn-fields-download-csv" style="background:#2563eb;">
+            Download fields CSV (DB)
+          </button>
+        </div>
+
+        <p class="small-text" id="fields-status" style="margin-top:8px;"></p>
+
+        <pre id="fields-json-output" style="margin-top:12px; max-height:260px; overflow:auto; background:#f3f4f6; padding:8px; border-radius:4px; font-size:12px;"></pre>
+      </section>
+    </div>
+
+
+    <!-- OPERATIONS PAGE -->
+        <!-- OPERATIONS PAGE -->
+    <div id="page-operations" style="display:none;">
+      <section class="section-box">
+        <div class="section-title">Normalized operations from JDOC (per field)</div>
+        <p class="small-text">
+          Fetch normalized operations for a specific field directly from JDOC, and see the JSON response.
+        </p>
+
+        <div style="margin-top:12px; margin-bottom:12px;">
+          <label class="small-text">Farmer ID</label><br>
+          <input id="ops-farmer-id" placeholder="e.g. anonymous" style="padding:6px 8px; width:240px; margin-bottom:6px;">
+          <br>
+          <label class="small-text">Org ID</label><br>
+          <input id="ops-org-id" placeholder="e.g. 4185" style="padding:6px 8px; width:240px; margin-bottom:6px;">
+          <br>
+          <label class="small-text">Field ID</label><br>
+          <input id="ops-field-id" placeholder="field id" style="padding:6px 8px; width:320px; margin-bottom:6px;">
+        </div>
+
+        <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="button" id="btn-ops-fetch-json">
+            Fetch normalized operations (JDOC)
+          </button>
+        </div>
+
+        <p class="small-text" id="ops-status" style="margin-top:8px;"></p>
+
+        <pre id="ops-json-output" style="margin-top:12px; max-height:260px; overflow:auto; background:#f3f4f6; padding:8px; border-radius:4px; font-size:12px;"></pre>
+      </section>
+
+      <section class="section-box" style="margin-top:16px;">
+        <div class="section-title">All normalized operations (from database)</div>
+        <p class="small-text">
+          Use optional filters to view or download a flat table of all normalized operations across organizations and fields.
+        </p>
+
+        <div style="margin-top:12px; margin-bottom:12px;">
+          <label class="small-text">Org ID (optional)</label><br>
+          <input id="flat-org-id" placeholder="e.g. 4185" style="padding:6px 8px; width:240px; margin-bottom:6px;">
+          <br>
+          <label class="small-text">Field ID (optional)</label><br>
+          <input id="flat-field-id" placeholder="field uuid" style="padding:6px 8px; width:320px; margin-bottom:6px;">
+        </div>
+
+        <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="button" id="btn-flat-fetch-json" style="background:#4b5563;">
+            View normalized operations (JSON)
+          </button>
+          <button class="button" id="btn-ops-download-csv" style="background:#2563eb;">
+            Download normalized operations CSV
+          </button>
+        </div>
+
+        <p class="small-text" id="flat-status" style="margin-top:8px;"></p>
+
+        <pre id="flat-json-output" style="margin-top:12px; max-height:260px; overflow:auto; background:#f3f4f6; padding:8px; border-radius:4px; font-size:12px;"></pre>
+      </section>
+    </div>
+
+
+
+    <!-- SYNC & LOGS PAGE -->
+        <!-- SYNC & LOGS PAGE -->
+    <div id="page-sync" style="display:none;">
+      <section class="section-box">
+        <div class="section-title">Manual sync from JDOC</div>
+        <p class="small-text">
+          Trigger a full sync from John Deere Operations Center into the local database for the configured farmer.
+        </p>
+
+        <div style="margin-top:12px; margin-bottom:12px;">
+          <label class="small-text">Farmer ID</label><br>
+          <input id="sync-farmer-id" placeholder="e.g. anonymous" style="padding:6px 8px; width:240px;">
+        </div>
+
+        <button class="button" id="btn-sync-now">Refresh from JDOC</button>
+        <span class="small-text" id="sync-status" style="margin-left:8px;"></span>
+      </section>
+
+      <section class="section-box" style="margin-top:16px;">
+        <div class="section-title">Current stats</div>
+        <p class="small-text">
+          Summary of data currently stored in the local database.
+        </p>
+
+        <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:16px;">
+          <div>
+            <div class="small-text">Organizations</div>
+            <div class="card-value" style="font-size:18px;" id="sync-org-count">0</div>
+          </div>
+          <div>
+            <div class="small-text">Fields</div>
+            <div class="card-value" style="font-size:18px;" id="sync-field-count">0</div>
+          </div>
+          <div>
+            <div class="small-text">Farmers</div>
+            <div class="card-value" style="font-size:18px;" id="sync-farmer-count">0</div>
+          </div>
+          <div>
+            <div class="small-text">Operations</div>
+            <div class="card-value" style="font-size:18px;" id="sync-ops-count">0</div>
+          </div>
+        </div>
+
+        <button class="button" id="btn-sync-refresh-stats" style="margin-top:10px; background:#4b5563;">
+          Refresh stats
+        </button>
+      </section>
+    </div>
+
+
+    <!-- EXPORTS PAGE -->
+        <!-- EXPORTS PAGE -->
+    <div id="page-exports" style="display:none;">
+      <section class="section-box">
+        <div class="section-title">Exports</div>
+        <p class="small-text">
+          Download CSV exports generated from the Deere connector database.
+        </p>
+
+        <div style="margin-top:12px; display:flex; flex-direction:column; gap:8px; max-width:320px;">
+          <button class="button" id="btn-export-orgs" style="background:#2563eb;">
+            Download Organizations CSV
+          </button>
+          <button class="button" id="btn-export-fields" style="background:#2563eb;">
+            Download Fields CSV
+          </button>
+          <button class="button" id="btn-export-ops" style="background:#2563eb;">
+            Download Operations CSV
+          </button>
+        </div>
+
+        <div style="margin-top:16px;">
+          <div class="section-title" style="font-size:14px;">Download any table</div>
+          <p class="small-text">
+            Select a table and download its contents as CSV.
+          </p>
+
+          <select id="export-table-name" style="padding:6px 8px; width:260px; margin-top:6px; margin-right:8px;">
+            <option value="">Select a table...</option>
+            <option value="organizations">organizations</option>
+            <option value="fields">fields</option>
+            <option value="operations_raw">operations_raw</option>
+            <option value="operations_normalized">operations_normalized</option>
+            <option value="field_sync_state">field_sync_state</option>
+            <option value="connected_organizations">connected_organizations</option>
+            <option value="user_tokens">user_tokens</option>
+          </select>
+
+          <button class="button" id="btn-export-table" style="background:#4b5563;">
+            Download table CSV
+          </button>
+        </div>
+      </section>
+    </div>
+
+
+
+
+
+  </main>
+</div>
+
+<script>
+  const API_BASE = 'http://34.200.216.123:8000';
+
+  async function loadSummary() {
+    try {
+      const res = await fetch(API_BASE + '/admin/dashboard/summary');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+
+      document.getElementById('org-count').textContent = data.organizations_connected ?? 0;
+      document.getElementById('field-count').textContent = data.fields_connected ?? 0;
+      const area = data.total_area_ha ?? 0;
+      document.getElementById('total-area').textContent = 'Total area: ' + area.toFixed(1) + ' ha';
+      document.getElementById('farmer-count').textContent = data.farmers_connected ?? 0;
+    } catch (err) {
+      console.error('Failed to load summary', err);
+    }
+  }
+
+  async function refreshFromJDOC() {
+    const btn = document.getElementById('refresh-sync-button');
+    const status = document.getElementById('refresh-status');
+    btn.disabled = true;
+    status.textContent = 'Sync in progress...';
+
+    try {
+      const res = await fetch(API_BASE + '/admin/sync/farmer?farmer_id=anonymous', {
+        method: 'POST'
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      status.textContent = 'Sync complete (' + (data.synced_operations ?? 0) + ' operations updated).';
+      await loadSummary(); // refresh counts after sync
+    } catch (err) {
+      console.error('Sync failed', err);
+      status.textContent = 'Sync failed.';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+
+  async function listOrganizationsForFarmer() {
+    const farmerId = document.getElementById('orgs-farmer-id').value.trim();
+    const output = document.getElementById('orgs-list-output');
+    if (!farmerId) {
+      output.textContent = 'Please enter a farmer_id.';
+      return;
+    }
+    output.textContent = 'Loading...';
+    try {
+      const url = API_BASE + '/api/organizations?farmer_id=' + encodeURIComponent(farmerId);
+      const resp = await fetch(url, { method: 'GET' });
+      const text = await resp.text();
+      output.textContent = text;
+    } catch (err) {
+      output.textContent = 'Error: ' + err;
+    }
+  }
+
+  async function syncOrganizationsToDb() {
+    const output = document.getElementById('orgs-sync-output');
+    output.textContent = 'Syncing organizations...';
+    try {
+      const url = API_BASE + '/admin/sync/organizations';
+      const resp = await fetch(url, { method: 'POST' });
+      const text = await resp.text();
+      output.textContent = text;
+    } catch (err) {
+      output.textContent = 'Error: ' + err;
+    }
+  }
+
+
+
+  async function fetchFieldsFromJDOC() {
+    const farmerInput = document.getElementById('fields-farmer-id');
+    const orgInput = document.getElementById('fields-org-id');
+    const status = document.getElementById('fields-status');
+    const output = document.getElementById('fields-json-output');
+
+    const farmerId = farmerInput.value.trim() || 'anonymous';
+    const orgId = orgInput.value.trim();
+
+    if (!orgId) {
+      status.textContent = 'Org ID is required to fetch fields.';
+      return;
+    }
+
+    status.textContent = 'Fetching fields from JDOC...';
+    output.textContent = '';
+
+    try {
+      const url = API_BASE + `/api/organizations/${encodeURIComponent(orgId)}/fields?farmer_id=${encodeURIComponent(farmerId)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      status.textContent = `Received ${Array.isArray(data) ? data.length : (data.values?.length || 0)} fields (raw JSON).`;
+      output.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      console.error('Error fetching fields', err);
+      status.textContent = 'Failed to fetch fields from JDOC.';
+    }
+}
+
+  function downloadFieldsCsv() {
+    const url = API_BASE + '/admin/tables/fields/download';
+    window.open(url, '_blank');
+}
+
+  async function fetchOperationsNormalized() {
+    const farmerInput = document.getElementById('ops-farmer-id');
+    const orgInput = document.getElementById('ops-org-id');
+    const fieldInput = document.getElementById('ops-field-id');
+    const status = document.getElementById('ops-status');
+    const output = document.getElementById('ops-json-output');
+
+    const farmerId = farmerInput.value.trim() || 'anonymous';
+    const orgId = orgInput.value.trim();
+    const fieldId = fieldInput.value.trim();
+
+    if (!orgId || !fieldId) {
+      status.textContent = 'Org ID and Field ID are required to fetch operations.';
+      return;
+    }
+
+    status.textContent = 'Fetching normalized operations from JDOC...';
+    output.textContent = '';
+
+    try {
+      const params = new URLSearchParams();
+      params.set('org_id', orgId);
+      params.set('farmer_id', farmerId);
+      // you can add start_date / end_date later if needed
+
+      const url = API_BASE + `/api/fields/${encodeURIComponent(fieldId)}/operations/normalized?` + params.toString();
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const count = data.count ?? (Array.isArray(data.operations) ? data.operations.length : 0);
+      status.textContent = `Received ${count} normalized operations (raw JSON).`;
+      output.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      console.error('Error fetching operations', err);
+      status.textContent = 'Failed to fetch normalized operations.';
+  }
+}
+
+  function downloadOperationsCsv() {
+    const orgId = document.getElementById('flat-org-id').value.trim();
+    const fieldId = document.getElementById('flat-field-id').value.trim();
+
+    const params = new URLSearchParams();
+    if (orgId) params.set('org_id', orgId);
+    if (fieldId) params.set('field_id', fieldId);
+
+    const url = API_BASE + '/admin/operations/normalized/download' + (params.toString() ? '?' + params.toString() : '');
+    window.open(url, '_blank');
+  }
+
+  async function fetchFlatOperationsJson() {
+    const orgId = document.getElementById('flat-org-id').value.trim();
+    const fieldId = document.getElementById('flat-field-id').value.trim();
+    const status = document.getElementById('flat-status');
+    const output = document.getElementById('flat-json-output');
+
+    status.textContent = 'Fetching normalized operations from database...';
+    output.textContent = '';
+
+    try {
+      const params = new URLSearchParams();
+      if (orgId) params.set('org_id', orgId);
+      if (fieldId) params.set('field_id', fieldId);
+
+      const url = API_BASE + '/admin/operations/normalized' + (params.toString() ? '?' + params.toString() : '');
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const count = data.count ?? (Array.isArray(data.operations) ? data.operations.length : 0);
+      status.textContent = `Retrieved ${count} normalized operations from database.`;
+      output.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      console.error('Error fetching flat operations', err);
+      status.textContent = 'Failed to fetch normalized operations from database.';
+    }
+  }
+
+
+  async function loadSyncStats() {
+    try {
+      const res = await fetch(API_BASE + '/admin/dashboard/summary');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      document.getElementById('sync-org-count').textContent = data.organizations_connected ?? 0;
+      document.getElementById('sync-field-count').textContent = data.fields_connected ?? 0;
+      document.getElementById('sync-farmer-count').textContent = data.farmers_connected ?? 0;
+      document.getElementById('sync-ops-count').textContent = data.operations_count ?? 0;
+    } catch (err) {
+      console.error('Failed to load sync stats', err);
+    }
+}
+
+  async function runManualSync() {
+    const farmerInput = document.getElementById('sync-farmer-id');
+    const status = document.getElementById('sync-status');
+    const btn = document.getElementById('btn-sync-now');
+
+    const farmerId = farmerInput.value.trim() || 'anonymous';
+
+    btn.disabled = true;
+    status.textContent = 'Sync in progress...';
+
+    try {
+      const url = API_BASE + '/admin/sync/farmer?farmer_id=' + encodeURIComponent(farmerId);
+      const res = await fetch(url, { method: 'POST' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const ops = data.synced_operations ?? 0;
+      status.textContent = `Sync complete (${ops} operations updated).`;
+      await loadSyncStats();
+    } catch (err) {
+      console.error('Manual sync failed', err);
+      status.textContent = 'Sync failed.';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+
+function exportOrganizationsCsv() {
+  const url = API_BASE + '/admin/tables/organizations/download';
+  window.open(url, '_blank');
+}
+
+function exportFieldsCsv() {
+  const url = API_BASE + '/admin/tables/fields/download';
+  window.open(url, '_blank');
+}
+
+function exportOperationsCsv() {
+  const url = API_BASE + '/admin/operations/normalized/download';
+  window.open(url, '_blank');
+}
+
+function exportAnyTableCsv() {
+  const select = document.getElementById('export-table-name');
+  const tableName = select.value;
+  if (!tableName) {
+    alert('Please select a table to download.');
+    return;
+  }
+  const url = API_BASE + '/admin/tables/' + encodeURIComponent(tableName) + '/download';
+  window.open(url, '_blank');
+}
+
+
+
+  function showPage(pageId, navId, title) {
+  const pages = ['page-overview', 'page-farmers','page-organizations', 'page-fields', 'page-operations', 'page-sync', 'page-exports'];
+  const navs = ['nav-overview', 'nav-farmers','nav-organizations', 'nav-fields', 'nav-operations', 'nav-sync', 'nav-exports'];
+
+  pages.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (id === pageId) ? '' : 'none';
+  });
+
+  navs.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', id === navId);
+  });
+
+  document.getElementById('page-title').textContent = title;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // initial load
+  loadSummary();
+  document.getElementById('refresh-sync-button').addEventListener('click', refreshFromJDOC);
+
+  // Organizations page
+  document.getElementById('btn-orgs-list').addEventListener('click', listOrganizationsForFarmer);
+  document.getElementById('btn-orgs-sync').addEventListener('click', syncOrganizationsToDb);
+
+
+  // fields page buttons
+  document.getElementById('btn-fields-fetch-json').addEventListener('click', fetchFieldsFromJDOC);
+  document.getElementById('btn-fields-download-csv').addEventListener('click', downloadFieldsCsv);
+
+  // operations page buttons
+  document.getElementById('btn-ops-fetch-json').addEventListener('click', fetchOperationsNormalized);
+  document.getElementById('btn-ops-download-csv').addEventListener('click', downloadOperationsCsv);
+  document.getElementById('btn-flat-fetch-json').addEventListener('click', fetchFlatOperationsJson);
+
+  // sync & logs buttons
+  document.getElementById('btn-sync-now').addEventListener('click', runManualSync);
+  document.getElementById('btn-sync-refresh-stats').addEventListener('click', loadSyncStats);
+
+  // exports page buttons
+  document.getElementById('btn-export-orgs').addEventListener('click', exportOrganizationsCsv);
+  document.getElementById('btn-export-fields').addEventListener('click', exportFieldsCsv);
+  document.getElementById('btn-export-ops').addEventListener('click', exportOperationsCsv);
+  document.getElementById('btn-export-table').addEventListener('click', exportAnyTableCsv);
+
+
+  // sidebar navigation
+  document.getElementById('nav-overview').addEventListener('click', () => {
+    showPage('page-overview', 'nav-overview', 'Overview');
+  });
+  document.getElementById('nav-farmers').addEventListener('click', () => {
+    showPage('page-farmers', 'nav-farmers', 'Farmers');
+  });
+  document.getElementById('nav-organizations').addEventListener('click', () => {
+    showPage('page-organizations', 'nav-organizations', 'Organizations');
+  });
+  document.getElementById('nav-fields').addEventListener('click', () => {
+    showPage('page-fields', 'nav-fields', 'Fields');
+  });
+  document.getElementById('nav-operations').addEventListener('click', () => {
+    showPage('page-operations', 'nav-operations', 'Operations');
+  });
+  document.getElementById('nav-sync').addEventListener('click', () => {
+    showPage('page-sync', 'nav-sync', 'Sync & Logs');
+  });
+  document.getElementById('nav-exports').addEventListener('click', () => {
+    showPage('page-exports', 'nav-exports', 'Exports');
+  });
+});
+
+</script>
+</body>
+</html>

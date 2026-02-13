@@ -29,10 +29,15 @@ class Settings:
     # OAuth Scopes (what permissions we need)
     SCOPES = "org1 org2 ag2 eq1 offline_access"
     
-    # Database
+    # AWS S3 Configuration (for data storage - NEW)
+    AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", "deere-connector-data-demo")
+    AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+    
+    # Database (kept for backwards compatibility, not used in S3 approach)
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./agricapture.db")
     
     # Security
     SECRET_KEY = os.getenv("SECRET_KEY", "change-this-secret-key-in-production")
+
 
 settings = Settings()

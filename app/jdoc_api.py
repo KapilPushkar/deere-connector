@@ -101,8 +101,21 @@ class JDOCClient:
             endpoint += '?embed=boundaries'
         
         response = await self._make_request(user_id, endpoint)
+        
+        # TEMP DEBUG: log Deere pagination links
+        print(f"[DEBUG] get_fields: org_id={org_id}, links={response.get('links')}")
+        fields = response.get('values', [])
+        print(f"[DEBUG] get_fields: received {len(fields)} fields for org_id={org_id}")
+        # TEMP DEBUG
+        print(f"[DEBUG] get_fields: received {len(fields)} fields for org_id={org_id}")
+
+
         return response.get('values', [])
+ 
     
+       
+
+   
     async def get_field_operations(
         self, 
         user_id: str, 
@@ -145,82 +158,104 @@ jdoc_client = JDOCClient()
 # HELPER FUNCTION: Normalize JDOC Operations
 # ============================================
 
-def normalize_operation(raw_operation: dict, field_id: str, field_name: str, org_id: str, org_name: str) -> "NormalizedOperation":
+def normalize_operation(
+    raw_operation: dict,
+    field_id: str,
+    field_name: str,
+    org_id: str,
+    org_name: str,
+) -> "NormalizedOperation":
     """
-    Convert a raw JDOC fieldOperation into AgriCapture's normalized format
-    
-    Args:
-        raw_operation: Raw JDOC fieldOperation JSON object
-        field_id: The field this operation belongs to
-        field_name: Name of the field
-        org_id: Organization ID
-        org_name: Organization name
-        
-    Returns:
-        NormalizedOperation with extracted/mapped fields
+    Convert a raw JDOC FieldOperation into AgriCapture's normalized format.
+    Uses Deere's FieldOperation shape:
+    - fieldOperationType: seeding / harvest / tillage / application / ...
+    - cropName, varieties, tillageProducts, startDate, endDate, etc.
     """
     from app.models import NormalizedOperation
     from datetime import datetime
-    
-    # Extract operation type (JDOC uses "type" or "operationType")
-    op_type = raw_operation.get("type") or raw_operation.get("operationType", "OTHER")
-    
-    # Get the start time (when the operation happened)
-    start_time = raw_operation.get("startTime")
-    if start_time:
-        # Parse ISO format timestamp
-        if isinstance(start_time, str):
-            try:
-                date = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-            except:
-                date = datetime.now()
-        else:
-            date = start_time
+
+    # --- 1) Operation type mapping ---
+
+    # Deere field name from your data: "fieldOperationType"
+    field_op_type = raw_operation.get("fieldOperationType")
+
+    if field_op_type == "seeding":
+        operation_type = "PLANTING"
+    elif field_op_type == "harvest":
+        operation_type = "HARVEST"
+    elif field_op_type == "tillage":
+        operation_type = "TILLAGE"
+    elif field_op_type == "application":
+        operation_type = "FERTILIZER"
     else:
-        date = datetime.now()
-    
-    # Extract crop name if available
-    crop_name = None
-    if "crop" in raw_operation:
-        crop_info = raw_operation.get("crop", {})
-        if isinstance(crop_info, dict):
-            crop_name = crop_info.get("name")
-        else:
-            crop_name = str(crop_info)
-    
-    # Extract area
+        operation_type = "OTHER"
+
+    # --- 2) Date / time ---
+
+    start_iso = raw_operation.get("startDate")  # e.g. "2020-04-22T02:00:41.212Z"
+    end_iso = raw_operation.get("endDate")
+
+    # Choose a main date (start if available, else end)
+    date_value = start_iso or end_iso
+
+    # Try to convert ISO string to datetime; fall back to now
+    date_parsed = None
+    if date_value and isinstance(date_value, str):
+        try:
+            date_parsed = datetime.fromisoformat(date_value.replace("Z", "+00:00"))
+        except Exception:
+            date_parsed = datetime.utcnow()
+    else:
+        date_parsed = datetime.utcnow()
+
+    # --- 3) Crop and product names ---
+
+    # Deere uses "cropName" for seeding/harvest in your sample
+    crop_name = raw_operation.get("cropName")
+
+    product_name = None
+    product_category = None
+
+    # Deere seeding/harvest uses "varieties": [ { name, productType, ... } ]
+    varieties = raw_operation.get("varieties") or []
+    if varieties and isinstance(varieties, list):
+        first_var = varieties[0]
+        if isinstance(first_var, dict):
+            product_name = first_var.get("name")
+            product_category = first_var.get("productType")  # e.g. "SEED"
+
+    # Tillage has "tillageProducts": [ { tillageType } ]
+    tillage_detail = None
+    tillage_products = raw_operation.get("tillageProducts") or []
+    if tillage_products and isinstance(tillage_products, list):
+        first_tillage = tillage_products[0]
+        if isinstance(first_tillage, dict):
+            tillage_detail = first_tillage.get("tillageType")
+
+    # --- 4) Area, rate, amount (still minimal for now) ---
+
     area = None
     area_unit = None
     if "area" in raw_operation:
-        area_obj = raw_operation.get("area", {})
+        area_obj = raw_operation.get("area") or {}
         if isinstance(area_obj, dict):
             area = area_obj.get("valueAsDouble") or area_obj.get("value")
-            area_unit = area_obj.get("unit", "ha")
-    
-    # Extract product and rate info (for fertilizer/spray operations)
-    product_name = None
+            area_unit = area_obj.get("unit") or "ha"
+
+    # Your current sample normalized output has amount/rate null; keep it that way for now.
     amount = None
     rate = None
     rate_unit = None
-    
-    if "resources" in raw_operation:
-        resources = raw_operation.get("resources", [])
-        if resources and len(resources) > 0:
-            first_resource = resources[0]
-            if isinstance(first_resource, dict):
-                product_name = first_resource.get("product", {}).get("name")
-                amount = first_resource.get("quantity", {}).get("valueAsDouble")
-                rate = first_resource.get("rate", {}).get("rateAsDouble")
-                rate_unit = first_resource.get("rate", {}).get("unit")
-    
-    # Create and return normalized operation
+
+    # --- 5) Build and return NormalizedOperation model ---
+
     return NormalizedOperation(
         field_id=field_id,
         field_name=field_name,
         org_id=org_id,
         org_name=org_name,
-        operation_type=op_type,
-        date=date,
+        operation_type=operation_type,
+        date=date_parsed,
         crop_name=crop_name,
         product_name=product_name,
         amount=amount,
@@ -228,8 +263,10 @@ def normalize_operation(raw_operation: dict, field_id: str, field_name: str, org
         rate_unit=rate_unit,
         area=area,
         area_unit=area_unit,
-        raw_jdoc_data=raw_operation  # Keep original for debugging
+        raw_jdoc_data=raw_operation,  # Keep original for debugging
     )
+
+
 
 
 def build_leaf_like_hierarchy(
