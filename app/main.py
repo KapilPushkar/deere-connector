@@ -30,7 +30,7 @@ import pathlib
 setup_logging()
 logger = get_logger(__name__)
 
-app = FastAPI(title="Deere Connector API")
+app = FastAPI(title="AgriCapture JDOC Integration")
 
 # Middleware to add request ID
 @app.middleware("http")
@@ -69,7 +69,7 @@ async def health_check():
     }
 
 ##
-app = FastAPI(title="AgriCapture JDOC Integration")
+
 
 templates = Jinja2Templates(directory="templates")
 
