@@ -100,12 +100,40 @@
       </section>
     </div>
 
+    
+
+
     <!-- PLACEHOLDER PAGES (Farmers, Fields, Operations, Sync, Exports) can be added later -->
 
         <!-- OVERVIEW PAGE -->
     <div id="page-overview">
       <!-- ...existing Overview content... -->
     </div>
+
+    <div id="page-farmers" style="display:none;">
+      <section class="section-box">
+        <div class="section-title">Farmers</div>
+        <p class="small-text">Connected farmers from the local SQLite database.</p>
+
+        <button class="button" id="btn-load-farmers" style="background:#2563eb; margin-top:8px;">
+          Refresh Farmers
+        </button>
+
+        <table class="data-table" style="margin-top:12px; width:100%; border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Email</th>
+            </tr>
+          </thead>
+          <tbody id="farmers-table-body">
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+
 
     <!-- FARMERS PAGE (placeholder) -->
     <div id="page-farmers" style="display:none;">
@@ -361,7 +389,7 @@
 </div>
 
 <script>
-  const API_BASE = 'http://34.200.216.123:8000';
+  const API_BASE = 'http://localhost:8000';
 
   async function loadSummary() {
     try {
@@ -400,6 +428,33 @@
       btn.disabled = false;
     }
   }
+
+
+  async function loadFarmers() {
+    const tbody = document.getElementById('farmers-table-body');
+    tbody.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
+    try {
+      const resp = await fetch(API_BASE + '/api/farmers');
+      const data = await resp.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3">No farmers found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = '';
+      data.forEach(f => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${f.id || ''}</td>
+          <td>${f.name || ''}</td>
+          <td>${f.email || ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="3">Error loading farmers: ' + err + '</td></tr>';
+    }
+  }
+
 
 
   async function listOrganizationsForFarmer() {
@@ -639,6 +694,11 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSummary();
   document.getElementById('refresh-sync-button').addEventListener('click', refreshFromJDOC);
 
+  // farmer
+  document.getElementById('btn-load-farmers').addEventListener('click', loadFarmers);
+  
+
+
   // Organizations page
   document.getElementById('btn-orgs-list').addEventListener('click', listOrganizationsForFarmer);
   document.getElementById('btn-orgs-sync').addEventListener('click', syncOrganizationsToDb);
@@ -670,6 +730,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('nav-farmers').addEventListener('click', () => {
     showPage('page-farmers', 'nav-farmers', 'Farmers');
+    loadFarmers();
   });
   document.getElementById('nav-organizations').addEventListener('click', () => {
     showPage('page-organizations', 'nav-organizations', 'Organizations');

@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Stre
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from typing import Optional
+from typing import List, Dict
 import secrets
 from .config import settings
 from .auth import auth
@@ -133,6 +134,9 @@ async def callback(
         
         # Save tokens to database
         db.save_token(farmer_id, token_data)
+        # Ensure farmer exists in farmers table
+        db.upsert_farmer(farmer_id, name=f"Farmer {farmer_id}")
+
         
         # Check if user needs to enable organization connections
         connections_url = await jdoc_client.check_connections_needed(farmer_id)
@@ -201,6 +205,15 @@ app.mount(
 # ============================================
 # API ENDPOINTS
 # ============================================
+
+@app.get("/api/farmers")
+async def list_farmers() -> list[dict]:
+    """
+    List farmers from the local SQLite 'farmers' table.
+    """
+    return db.get_all_farmers()
+
+
 
 @app.get("/api/organizations")
 async def list_organizations(farmer_id: str = Query(...)):
