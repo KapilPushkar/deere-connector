@@ -365,6 +365,7 @@
 
           <select id="export-table-name" style="padding:6px 8px; width:260px; margin-top:6px; margin-right:8px;">
             <option value="">Select a table...</option>
+            <option value="farmers">farmers</option>
             <option value="organizations">organizations</option>
             <option value="fields">fields</option>
             <option value="operations_raw">operations_raw</option>
@@ -389,7 +390,7 @@
 </div>
 
 <script>
-  const API_BASE = 'http://localhost:8000';
+  const API_BASE = 'http://54.91.102.42:8000';
 
   async function loadSummary() {
     try {
@@ -407,20 +408,26 @@
     }
   }
 
+
   async function refreshFromJDOC() {
     const btn = document.getElementById('refresh-sync-button');
     const status = document.getElementById('refresh-status');
     btn.disabled = true;
     status.textContent = 'Sync in progress...';
 
+    // Use the actual Deere user id that has a token
+    const farmerId = 'klee@agricapture.com';
+
     try {
-      const res = await fetch(API_BASE + '/admin/sync/farmer?farmer_id=anonymous', {
+      const params = new URLSearchParams();
+      params.set('farmer_id', farmerId);
+      const res = await fetch(API_BASE + '/admin/sync/farmer?' + params.toString(), {
         method: 'POST'
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
-      status.textContent = 'Sync complete (' + (data.synced_operations ?? 0) + ' operations updated).';
-      await loadSummary(); // refresh counts after sync
+      status.textContent = `Sync complete: ${data.synced_operations ?? 0} operations updated.`;
+      await loadSummary();
     } catch (err) {
       console.error('Sync failed', err);
       status.textContent = 'Sync failed.';
@@ -428,6 +435,7 @@
       btn.disabled = false;
     }
   }
+
 
 
   async function loadFarmers() {
@@ -475,11 +483,21 @@
     }
   }
 
+
   async function syncOrganizationsToDb() {
     const output = document.getElementById('orgs-sync-output');
+    const farmerId = document.getElementById('orgs-farmer-id').value.trim();
+    if (!farmerId) {
+      output.textContent = 'Please enter a farmer_id before syncing.';
+      return;
+    }
+
     output.textContent = 'Syncing organizations...';
     try {
-      const url = API_BASE + '/admin/sync/organizations';
+      const params = new URLSearchParams();
+      params.set('farmer_id', farmerId);
+      const url = API_BASE + '/admin/sync/organizations?' + params.toString();
+
       const resp = await fetch(url, { method: 'POST' });
       const text = await resp.text();
       output.textContent = text;
@@ -487,6 +505,8 @@
       output.textContent = 'Error: ' + err;
     }
   }
+
+
 
 
 

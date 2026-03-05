@@ -37,7 +37,7 @@ class JDOCClient:
         
         url = f"{self.base_url}{endpoint}"
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.request(method, url, headers=headers, **kwargs)
             
             if response.status_code == 401:
@@ -48,6 +48,37 @@ class JDOCClient:
                 raise Exception(f"API request failed: {response.status_code} - {response.text}")
             
             return response.json()
+
+    
+    async def _paginate(self, user_id: str, endpoint: str, params: dict = None) -> List[Dict]:
+        """Follow Deere pagination and return all values."""
+        results = []
+        next_url = endpoint
+
+        while next_url:
+            response = await self._make_request(user_id, next_url, params=params)
+            params = None  # only pass params on first request
+
+            page_values = response.get("values", [])
+            results.extend(page_values)
+
+            # find nextPage link
+            next_link = None
+            for link in response.get("links", []):
+                if link.get("rel") in ("nextPage", "next"):
+                    next_link = link.get("uri")
+                    break
+
+            if next_link:
+                if next_link.startswith(self.base_url):
+                    next_url = next_link[len(self.base_url):]
+                else:
+                    next_url = next_link
+            else:
+                next_url = None
+
+        return results
+
     
     async def get_organizations(self, user_id: str) -> List[Dict]:
         """
@@ -56,14 +87,9 @@ class JDOCClient:
         Returns:
             List of organization dictionaries
         """
-        response = await self._make_request(user_id, '/organizations')
-        
-        organizations = response.get('values', [])
-        
-        # Save organizations to database
+        organizations = await self._paginate(user_id, "/organizations")
         for org in organizations:
             db.save_organization(user_id, org)
-        
         return organizations
     
     async def check_connections_needed(self, user_id: str) -> Optional[str]:
@@ -83,7 +109,7 @@ class JDOCClient:
         
         return None
     
-    async def get_fields(self, user_id: str, org_id: str, include_boundaries: bool = True) -> List[Dict]:
+#    async def get_fields(self, user_id: str, org_id: str, include_boundaries: bool = True) -> List[Dict]:
         """
         Get all fields for an organization
         
@@ -95,35 +121,44 @@ class JDOCClient:
         Returns:
             List of field dictionaries
         """
-        endpoint = f'/organizations/{org_id}/fields'
+#        endpoint = f'/organizations/{org_id}/fields'
         
-        if include_boundaries:
-            endpoint += '?embed=boundaries'
+#        if include_boundaries:
+#            endpoint += '?embed=boundaries'
         
-        response = await self._make_request(user_id, endpoint)
+#        response = await self._make_request(user_id, endpoint)
         
         # TEMP DEBUG: log Deere pagination links
-        print(f"[DEBUG] get_fields: org_id={org_id}, links={response.get('links')}")
-        fields = response.get('values', [])
-        print(f"[DEBUG] get_fields: received {len(fields)} fields for org_id={org_id}")
+#        print(f"[DEBUG] get_fields: org_id={org_id}, links={response.get('links')}")
+#        fields = response.get('values', [])
+#        print(f"[DEBUG] get_fields: received {len(fields)} fields for org_id={org_id}")
         # TEMP DEBUG
-        print(f"[DEBUG] get_fields: received {len(fields)} fields for org_id={org_id}")
+#        print(f"[DEBUG] get_fields: received {len(fields)} fields for org_id={org_id}")
 
 
-        return response.get('values', [])
- 
-    
-       
+#        return response.get('values', [])
+
+
+    async def get_fields(self, user_id: str, org_id: str, include_boundaries: bool = True) -> List[Dict]:
+        endpoint = f"/organizations/{org_id}/fields"
+        if include_boundaries:
+            endpoint += "?embed=boundaries"
+        fields = await self._paginate(user_id, endpoint)
+        print(f"[DEBUG] get_fields: TOTAL {len(fields)} fields for org_id={org_id}")
+        return fields
+
+
+
 
    
-    async def get_field_operations(
-        self, 
-        user_id: str, 
-        org_id: str, 
-        field_id: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
-    ) -> List[Dict]:
+#    async def get_field_operations(
+#        self, 
+#        user_id: str, 
+#        org_id: str, 
+#        field_id: str,
+#        start_date: Optional[str] = None,
+#        end_date: Optional[str] = None
+#    ) -> List[Dict]:
         """
         Get field operations for a specific field
         
@@ -137,16 +172,31 @@ class JDOCClient:
         Returns:
             List of field operation dictionaries
         """
-        endpoint = f'/organizations/{org_id}/fields/{field_id}/fieldOperations'
+#        endpoint = f'/organizations/{org_id}/fields/{field_id}/fieldOperations'
         
+#        params = {}
+#        if start_date:
+#            params['startDate'] = start_date
+#        if end_date:
+#            params['endDate'] = end_date
+        
+#        response = await self._make_request(user_id, endpoint, params=params)
+#        return response.get('values', [])
+
+
+    async def get_field_operations(self, user_id: str, org_id: str, field_id: str,
+                                    start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict]:
+        endpoint = f"/organizations/{org_id}/fields/{field_id}/fieldOperations"
         params = {}
         if start_date:
-            params['startDate'] = start_date
+            params["startDate"] = start_date
         if end_date:
-            params['endDate'] = end_date
-        
-        response = await self._make_request(user_id, endpoint, params=params)
-        return response.get('values', [])
+            params["endDate"] = end_date
+        ops = await self._paginate(user_id, endpoint, params=params if params else None)
+        print(f"[DEBUG] get_field_operations: TOTAL {len(ops)} ops for field_id={field_id}")
+        return ops
+
+
 
 # Global JDOC client instance
 jdoc_client = JDOCClient()

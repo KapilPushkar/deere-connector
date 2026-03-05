@@ -135,7 +135,10 @@ async def callback(
         # Save tokens to database
         db.save_token(farmer_id, token_data)
         # Ensure farmer exists in farmers table
-        db.upsert_farmer(farmer_id, name=f"Farmer {farmer_id}")
+        # If farmer_id looks like an email, capture name + email
+        email = farmer_id if "@" in farmer_id else None
+        name = farmer_id.split("@")[0] if "@" in farmer_id else farmer_id
+        db.upsert_farmer(farmer_id, name=name, email=email)
 
         
         # Check if user needs to enable organization connections
@@ -608,6 +611,7 @@ VALID_TABLES = {
     "field_sync_state",
     "connected_organizations",
     "user_tokens",
+    "farmers",
 }
 
 
@@ -891,19 +895,13 @@ async def get_dashboard_summary():
     """
     summary = db.get_dashboard_summary()
 
-    # For now, farmers_count = distinct farmer_id in organizations
-    conn = sqlite3.connect(db.db_path)
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(DISTINCT farmer_id) FROM organizations")
-    farmers_count = cursor.fetchone()[0]
-    conn.close()
-
+    
     return {
         "organizations_connected": summary["organizations_count"],
         "fields_connected": summary["fields_count"],
         "total_area_ha": summary["total_area_ha"],
         "operations_count": summary["operations_count"],
-        "farmers_connected": farmers_count,
+        "farmers_connected": summary["farmers_count"],
     }
 
 

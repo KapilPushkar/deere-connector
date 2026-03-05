@@ -10,18 +10,20 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #3b7a3a 0%, #2f6b32 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
         }
+
         
-        .container {
+        
+       .container {
             background: white;
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
@@ -35,8 +37,9 @@
             margin-bottom: 30px;
         }
         
+        
         .logo h1 {
-            color: #667eea;
+            color: #2f6b32;
             font-size: 32px;
             font-weight: 700;
         }
@@ -77,8 +80,9 @@
             margin-bottom: 12px;
         }
         
+        
         .benefit-icon {
-            background: #667eea;
+            background: #2f6b32;
             color: white;
             border-radius: 50%;
             width: 24px;
@@ -96,9 +100,11 @@
             line-height: 1.5;
         }
         
+          
+        
         .connect-btn {
             width: 100%;
-            background: #667eea;
+            background: #2f6b32;
             color: white;
             border: none;
             padding: 16px;
@@ -110,9 +116,9 @@
         }
         
         .connect-btn:hover {
-            background: #5568d3;
+            background: #275428;
         }
-        
+
         .security-notice {
             margin-top: 20px;
             padding: 15px;
@@ -138,9 +144,10 @@
 <body>
     <div class="container">
         <div class="logo">
-            <h1>🌾 AgriCapture</h1>
-        </div>
-        
+            <img src="/admin-static/agricapture-logo.jpg"
+                 alt="AgriCapture"
+                 style="height:48px; object-fit:contain;">
+        </div>        
         <div class="header">
             <h2>Connect Your Farm Data</h2>
             <p>Securely share your John Deere Operations Center data with AgriCapture to unlock powerful insights and streamline your farm management.</p>
@@ -177,10 +184,20 @@
                 </div>
             </div>
         </div>
-        
-        <button class="connect-btn" onclick="connectAccount()">
-            Connect John Deere Account
-        </button>
+        <form action="{{ base_url }}/auth/login" method="GET">
+            <label for="farmer_email" style="display:block; margin-bottom:8px; font-weight:600; text-align:center;">
+                Enter your John Deere email to connect:
+            </label>
+            <input type="email"
+                   name="farmer_id"
+                   id="farmer_email"
+                   required
+                   placeholder="you@example.com"
+                   style="display:block; margin:0 auto 16px auto; padding:10px; width:100%; max-width:320px; border:1px solid #ccc; border-radius:6px; font-size:14px;">
+            <button type="submit" class="connect-btn">
+                Connect John Deere Account
+            </button>
+        </form>        
         
         <div class="security-notice">
             <p>
@@ -190,15 +207,10 @@
         </div>
         
         <div class="footer">
-            <p>Powered by HornbillAg | Questions? Contact support@hornbillag.com</p>
+            <p>Powered by HornbillAg | Questions? Contact info@hornbillag.com</p>
         </div>
     </div>
     
-    <script>
-        function connectAccount() {
-            // Redirect to OAuth login endpoint
-            window.location.href = '{{ base_url }}/auth/login';
-        }
-    </script>
+    
 </body>
 </html>

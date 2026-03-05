@@ -127,6 +127,20 @@ class Database:
             )
         ''')
 
+
+        # Farmers table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS farmers (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            email TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+
+
+
         conn.commit()
         conn.close()
     
@@ -262,6 +276,39 @@ class Database:
         
         return [dict(row) for row in rows]
 
+
+    # ---------- Farmers ----------
+
+    def upsert_farmer(self, farmer_id: str, name: str = None, email: str = None):
+        """Insert or update a farmer record."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+        INSERT INTO farmers (id, name, email, created_at, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+            name = COALESCE(excluded.name, farmers.name),
+            email = COALESCE(excluded.email, farmers.email),
+            updated_at = CURRENT_TIMESTAMP
+        ''', (farmer_id, name, email))
+        conn.commit()
+        conn.close()
+
+    def get_all_farmers(self) -> list[dict]:
+        """Return all farmers."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('''
+        SELECT id, name, email, created_at, updated_at
+        FROM farmers
+        ORDER BY created_at DESC
+        ''')
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+
     # ---------- NEW: Organizations & Fields ----------
 
     def upsert_organization(self, farmer_id: str, org_data: Dict):
@@ -303,6 +350,18 @@ class Database:
             except Exception:
                 geometry_json = None
 
+        # Extract area from boundaries (Deere puts area inside boundary, not at field level)
+        area_ha = None
+        if 'boundaries' in field_data:
+            for boundary in field_data.get('boundaries', []):
+                if isinstance(boundary, dict) and 'area' in boundary:
+                    area_obj = boundary.get('area', {})
+                    if isinstance(area_obj, dict):
+                        area_ha = area_obj.get('valueAsDouble') or area_obj.get('value')
+                        if area_ha:
+                            break
+
+
         cursor.execute('''
             INSERT INTO fields (field_id, org_id, name, external_id, area_ha, geometry_json, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -318,7 +377,10 @@ class Database:
             org_id,
             field_data.get('name'),
             field_data.get('externalId'),
-            field_data.get('area', {}).get('value') if isinstance(field_data.get('area'), dict) else None,
+#            field_data.get('area', {}).get('value') if isinstance(field_data.get('area'), dict) else None,
+#            (field_data.get("area", {}).get("valueAsDouble") or field_data.get("area", {}).get("value")) if isinstance(field_data.get("area"), dict) else None,
+            area_ha,
+
             geometry_json
         ))
 
@@ -407,9 +469,13 @@ class Database:
         cursor.execute("SELECT COUNT(*) FROM operations_normalized")
         operations_count = cursor.fetchone()[0]
 
+        cursor.execute("SELECT COUNT(*) FROM farmers")
+        farmers_count = cursor.fetchone()[0]
+
         conn.close()
 
         return {
+            "farmers_count": farmers_count,
             "organizations_count": orgs_count,
             "fields_count": fields_count,
             "total_area_ha": total_area_ha,
